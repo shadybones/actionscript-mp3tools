@@ -1,5 +1,12 @@
-﻿package mine.audio.ID3 {
-	import mine.audio.ID3.ID3v2Frame;
+﻿////////////IN GENERAL, NOT TESTED VERY WELL
+////////////ALPHA VERSION
+////////////USE AT YOUR OWN DISCRETION - LICENSE & INFO: http://code.google.com/p/actionscript-mp3tools/
+////////////Author: Jordan Williams
+////////////Web: http://quixological.com
+////////////Work: http://shadybones.elance.com
+
+package org.outertia.audio.ID3 {
+	import org.outertia.audio.ID3.ID3v2Frame;
 	import flash.utils.ByteArray;
 	
 	//GOOD FOR: T---,WXXX,IPLS,COMM,USLT,USER
@@ -16,75 +23,90 @@
 			if(args){ lingo = args[0]; disco = args[1]; }
 		}
 		override public function value():*{
-			if(!ID || !data || length==0) return null;
+			if(!ID || !_data || _data.length == 0) return null;
 			if(content && content.length) return content;
-			data.position = 0;
-			encoding = data.readUnsignedByte();
-			if(lingo) language = data.readUTFBytes(3);
-			
+			_data.position = 0;
+			encoding = _data.readUnsignedByte();
+			if(lingo) language = _data.readUTFBytes(3);
+			hasParsedData = true;
 			var first:String;
 			var pos:uint;
 			var orig:uint;
-			if(data.bytesAvailable) orig = data.readUnsignedByte();
+			if(_data.bytesAvailable) orig = _data.readUnsignedByte();
 			else return "";
 			if(orig == 255){
-				if(data.bytesAvailable) data.readByte();
+				if(_data.bytesAvailable) _data.readByte();
 				else return "";
-				orig = data.position;
-				while(data.bytesAvailable && data.readUnsignedShort() != 0){}
-				if(!data.bytesAvailable) pos = data.position;
-				else pos = data.position-2;
+				orig = _data.position;
+				while(_data.bytesAvailable && _data.readUnsignedShort() != 0){}
+				if(!_data.bytesAvailable) pos = _data.position;
+				else pos = _data.position-2;
 				first = ""; 
-				data.position = orig;
+				_data.position = orig;
 				for(var i:int = orig; i < pos; i++){
-					first += data.readUTFBytes(1);
+					first += _data.readUTFBytes(1);
 				}
-				if(data.bytesAvailable) data.readByte(); 
-				if(data.bytesAvailable) data.readByte();
+				if(_data.bytesAvailable) _data.readByte(); 
+				if(_data.bytesAvailable) _data.readByte();
 			} else{
-				data.position--;
-				orig = data.position;
-				first = data.readUTFBytes(data.bytesAvailable);
-				data.position = orig + first.length;
-				if(data.bytesAvailable) data.readByte();
+				_data.position--;
+				orig = _data.position;
+				first = _data.readUTFBytes(_data.bytesAvailable);
+				_data.position = orig + first.length;
+				if(_data.bytesAvailable) _data.readByte();
 			}
-			if(!data.bytesAvailable){
-				content = ""+first;
+			if(!_data.bytesAvailable){
+				if(_ID=="COMM") description = ""+first;
+				else content = ""+first;
 				return content;
 			} else description = first;
 			
 			orig = data.readUnsignedByte();
 			if(orig == 255){
-				if(data.bytesAvailable) data.readByte();
+				if(_data.bytesAvailable) _data.readByte();
 				else return "";
-				orig = data.position;
-				while(data.bytesAvailable && data.readUnsignedShort() != 0){}
-				if(!data.bytesAvailable) pos = data.position;
-				else pos = data.position-2;
+				orig = _data.position;
+				while(_data.bytesAvailable && _data.readUnsignedShort() != 0){}
+				if(!_data.bytesAvailable) pos = _data.position;
+				else pos = _data.position-2;
 				content = "";
-				data.position = orig;
+				_data.position = orig;
 				for(i = orig; i < pos; i++){
-					content += data.readUTFBytes(1);
+					content += _data.readUTFBytes(1);
 				}
 				return content;
 			} else{
-				data.position--;
-				content = ""+data.readUTFBytes(data.bytesAvailable);
+				_data.position--;
+				content = ""+_data.readUTFBytes(_data.bytesAvailable);
 				return content;
 			}
 		}
-		private function formatData():void{
-			data = new ByteArray();
-			data.writeByte(0);//encoding
+		override protected function formatData():void{
+			var tmp = _data;
+			_data = new ByteArray();
+			_data.writeByte(0);//encoding
 			if(lingo){
 				if(language && language.length > 2) writeUTFBytes(language.substring(0,3));
 				else writeUTFBytes("eng");
 			}
 			if(disco){ 
 				writeUTFBytes(description); 
-				data.writeByte(0); 
+				_data.writeByte(0); 
 			}
 			writeUTFBytes(content);
+			trace("formatting data in txtFrame");
+			if(tmp){
+				for(var i:int = 0; i < _data.length && i < tmp.length ; i++){
+					trace(i,_data[i],tmp[i],(_data[i]==tmp[i]));
+				}
+			}
+		}
+		public function toString():String{
+			var st:String = _ID+" tag. Content="+content+" hasLingo="+lingo+" hasDescr="+ disco+" hasParsedData="+hasParsedData;
+			if(disco) st += " Descr="+description;
+			if(lingo) st += " Lang="+language;
+			if(hasParsedData) st+= " Data.length="+_data.length;
+			return st;
 		}
 	}
 }

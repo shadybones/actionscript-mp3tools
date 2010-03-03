@@ -1,4 +1,11 @@
-﻿package mine.audio.ID3 {
+﻿////////////IN GENERAL, NOT TESTED VERY WELL
+////////////ALPHA VERSION
+////////////USE AT YOUR OWN DISCRETION - LICENSE & INFO: http://code.google.com/p/actionscript-mp3tools/
+////////////Author: Jordan Williams
+////////////Web: http://quixological.com
+////////////Work: http://shadybones.elance.com
+
+package org.outertia.audio.ID3 {
 	import flash.utils.ByteArray;
 	public class ID3v1 {
 		public static const GENRE_LIST:Array = [
