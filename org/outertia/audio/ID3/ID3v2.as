@@ -1,7 +1,14 @@
-﻿package mine.audio.ID3 {
+﻿////////////IN GENERAL, NOT TESTED VERY WELL
+////////////ALPHA VERSION
+////////////USE AT YOUR OWN DISCRETION - LICENSE & INFO: http://code.google.com/p/actionscript-mp3tools/
+////////////Author: Jordan Williams
+////////////Web: http://quixological.com
+////////////Work: http://shadybones.elance.com
+
+package org.outertia.audio.ID3 {
 	import flash.utils.ByteArray;
-	import mine.core.CRC32;
-	import mine.audio.ID3.ID3v2Frame;
+	import org.outertia.core.CRC32;    ////////////////////////<----must change to your own, expects static function generate(ba) to return crc32
+	import org.outertia.audio.ID3.ID3v2Frame;
 	
 	public class ID3v2 {
 		public static const TITLE:String = "TIT2";
@@ -56,12 +63,15 @@
 		public static const EXT_HEADER_CRC32:int = 0x8000;
 		
 		private var frames:Object;
+		// framesAvail is an array of the ID strings of frames in the frames Object. It's a way to keep
+		// track of what is in frames and what is not since everything is a loose reference.
 		private var framesAvail:Array;
 		public var version:uint;
 		public var revision:uint;
 		public var flags:uint;
 		public var length:int;
 		public var exportData:ByteArray;
+		public var postfixPadding:int;
 		private var extHeader:ExtendedHeader;
 		
 		public function ID3v2(v:int=3,r:int=0){
@@ -71,7 +81,7 @@
 			framesAvail = new Array();
 			flags = UNSYNCHRONIZED;
 		}
-		private var _f:int,_fa:int;
+		private var _f:int=-1,_fa:int;
 		public function nextFrame():ID3v2Frame{
 			if(_fa >= framesAvail.length) {_f=0;_fa=0;return null;}
 			var s:String = framesAvail[_fa];
@@ -79,11 +89,11 @@
 			var o = frames[s];
 			if(!o){_f=0;_fa=0;return null;}
 			if(o is Array){
-				_f++;
+				++_f;
 				if(_f < o.length) return o[_f];
 				else { 
 					_f = -1;
-					_fa++;
+					++_fa;
 					return nextFrame();
 				}
 			}else{_fa++; return o;}
@@ -107,16 +117,23 @@
 				} else flags &= ~EXTENDED_HEADER;
 			}
 			for each(var st:String in framesAvail){
+				trace(st);
 				var cont = frames[st];
 				if(cont is Array){
+					trace(st,cont.length);
 					for each (var t:ID3v2Frame in cont){
 						bp = t.export();
 						if(bp) ba.writeBytes(bp);
 					}
 				} else if(cont is ID3v2Frame){
-					bp = cont.export()
+					bp = cont.export();
+					if(bp) trace(bp.length);
+					else trace(st,"didn't work");
 					if(bp) ba.writeBytes(bp);
 				}
+			}
+			for(var i:int = postfixPadding; i > 0; --i){
+				ba.writeByte(0);
 			}
 			if(flags&EXTENDED_HEADER){
 				ba.position = 20;
@@ -127,7 +144,7 @@
 			if(flags&UNSYNCHRONIZED){ ba.position = 10; unsync(ba); }
 			if(flags&EXTENDED_HEADER){
 				ba.position = ba.length;
-				for(var i:int =0; i < extHeader.padding; i++) ba.writeByte(0);
+				for(i = extHeader.padding; i > 0 ; --i) ba.writeByte(0);
 			}
 			ba.position = 6;
 			var len:int = ba.length - 10;
@@ -144,17 +161,21 @@
 				return frames[ID];
 			else return null;
 		}
-		public function addFrame(fr:ID3v2Frame):void{
+		public function addFrame(fr:ID3v2Frame):*{
 			if(fr.ID == null) return;
-			var old;
-			if(frames.hasOwnProperty(fr.ID)) old = frames[fr.ID];
+			var old = this.getFrame(fr.ID);
 			if(old != null){
-				if(old is Array) old.push(fr);
-				else frames[fr.ID] = [old, fr];
+				if( canHaveMultipleFrames(fr.ID) ){
+					if(old is Array) old.push(fr);
+					else frames[fr.ID] = [old, fr];
+				} else {
+					frames[fr.ID] = fr;
+				}
 			} else { 
 				frames[fr.ID] = fr;
 				framesAvail.push(fr.ID);
 			}
+			return old;
 		}
 		private function createHeader():ByteArray{
 			var ba:ByteArray = new ByteArray();
@@ -180,7 +201,7 @@
 		private function unsync(ba:ByteArray):void{
 			var len:int = ba.bytesAvailable;
 			var needToUnsync:Boolean = false;
-			for(var i:int = 0; i < len; i++){
+			for(var i:int = len; i > 0; --i){
 				if(ba.readUnsignedByte() == 0xFF){
 					if(ba.readUnsignedByte()>>5 == 7){ needToUnsync = true; break; }
 				}
@@ -189,7 +210,7 @@
 				ba.position = ba.length - len;
 				var t:uint;
 				var p:int;
-				for(i = 0; i < len; i++){
+				for(i = len; i > 0; --i){
 					if(ba.readUnsignedByte() == 0xFF){
 						t = ba.readUnsignedByte();
 						if(t == 0 || t>>5 == 7){
@@ -223,6 +244,27 @@
 			if(id1.year)   { tit = new ID3TextFrame("TYER"); tit.content = id1.year;    id3.addFrame(tit); }
 			return id3;
 		}
+		public static function canHaveMultipleFrames(ID:String):Boolean{
+			switch(ID){
+				case "TXXX":
+				case "WXXX":
+				case "UFID":
+				case "WOAR":
+				case "WCOM":
+				case "USLT":
+				case "SYLT":
+				case "COMM":
+				case "APIC":
+				case "GEOB":
+				case "POPM":
+				case "AENC":
+				case "ENCR":
+				case "GRID":
+				case "PRIV": return true;
+				default : break;
+			}
+			return false;
+		}
 		
 		public static function parse(data:ByteArray):ID3v2 {
 			if(data.readUTFBytes(3) != 'ID3') return null;
@@ -233,11 +275,11 @@
 			id3.length |= data.readUnsignedByte() << 14;
 			id3.length |= data.readUnsignedByte() << 7;
 			id3.length |= data.readUnsignedByte();
-			var end:int = 10 + id3.length;
+			var end:int = data.position + id3.length;  //10 + id3.length if started at 0;
 			if(id3.flags&UNSYNCHRONIZED){
 				while(data.position < end){
 					if(data.readUnsignedByte() == 0xFF && data.readUnsignedByte() == 0){
-						var tmp = new ByteArray();
+						var tmp:ByteArray = new ByteArray();
 						var p:int = data.position - 1;
 						data.readBytes(tmp,0,end - data.position);
 						data.position = p;
@@ -257,6 +299,7 @@
 			}
 			//FRAMES
 			var currFrame:ID3v2Frame;
+			var endOfLastFrame:int = data.position;
 			while (data.position < end){
 				currByte = data.readUnsignedByte();
 				if(currByte < 0x30 || currByte > 0x5A) continue;
@@ -279,13 +322,33 @@
 				}
 				currFrame.length = data.readUnsignedInt();
 				currFrame.flags = data.readUnsignedShort();
-				currFrame.data = new ByteArray();
-				if(currFrame.length) data.readBytes(currFrame.data,0,currFrame.length);
-				currFrame.data.position = 0;
-				trace(currFrame.ID,currFrame.length,currFrame.flags,currFrame.data.length);
+				tmp = new ByteArray();
+				if(currFrame.length) data.readBytes(tmp,0,currFrame.length);
+				//currFrame.data.position = 0;
+				//trace(currFrame.ID,currFrame.length,currFrame.flags,currFrame.value());
+				currFrame.data = tmp;
 				id3.addFrame(currFrame);
+				endOfLastFrame = data.position;
 			}
+			id3.postfixPadding = end - endOfLastFrame;
+			//trace(id3.postfixPadding," padding on end");
 			return id3;
+		}
+		public function toString():String{
+			var st:String = "ID3v2 tag.";
+			var a:Object;
+			var t:int;
+			_f = -1; _fa = 0;
+			a = nextFrame();
+			while(a){  
+				st += " Frame:"+ a.ID;
+				++t;
+				a = nextFrame();
+			}
+			st += " Frames:"+t;
+			st += " Length:"+length;
+			st += " Padding:"+postfixPadding;
+			return st;
 		}
 	}
 }

@@ -1,5 +1,12 @@
-﻿package mine.audio.ID3 {
-	import mine.audio.ID3.ID3v2Frame;
+﻿////////////IN GENERAL, NOT TESTED VERY WELL
+////////////ALPHA VERSION
+////////////USE AT YOUR OWN DISCRETION - LICENSE & INFO: http://code.google.com/p/actionscript-mp3tools/
+////////////Author: Jordan Williams
+////////////Web: http://quixological.com
+////////////Work: http://shadybones.elance.com
+
+package org.outertia.audio.ID3 {
+	import org.outertia.audio.ID3.ID3v2Frame;
 	import flash.utils.ByteArray;
 	
 	//GOOD FOR: W---,PRIV,UFID,MCDI,SYTC,EQUA,GRID,ENCR,POPM,PCNT,POSS
@@ -17,33 +24,34 @@
 			content = new ByteArray();
 		}
 		override public function value():*{
-			if(!ID || !data || length==0) return null;
+			if(!ID || !_data || _data.length==0) return null;
 			if(content && content.length) return content; 
 			else if(info && info.length) return info;
 			else if (hbyte && byte) return byte;
-			else data.position = 0;
+			else _data.position = 0;
 			if(htext){
-				info = data.readUTFBytes(data.bytesAvailable);
-				data.position = info.length;
-				if(data.bytesAvailable) data.readByte();
+				info = _data.readUTFBytes(_data.bytesAvailable);
+				_data.position = info.length;
+				if(_data.bytesAvailable) _data.readByte();
 			}
 			if(hbyte){
-				if(data.bytesAvailable) byte = data.readUnsignedByte();
+				if(_data.bytesAvailable) byte = _data.readUnsignedByte();
 			}
-			if(data.bytesAvailable){
-				data.readBytes(content,0,data.bytesAvailable); 
+			if(_data.bytesAvailable){
+				_data.readBytes(content,0,_data.bytesAvailable); 
 			} else{
 				if(htext) return info;
 				else if(hbyte) return byte;
 			}
+			hasParsedData = true;
 			return content;
 		}
-		private function formatData():void{
-			data = new ByteArray();
-			if(htext) { writeUTFBytes(info); data.writeByte(0); }
-			if(hbyte) data.writeByte(byte);
+		override protected function formatData():void{
+			_data = new ByteArray();
+			if(htext) { writeUTFBytes(info); _data.writeByte(0); }
+			if(hbyte) _data.writeByte(byte);
 			content.position=0;
-			content.readBytes(data);
+			content.readBytes(_data);
 		}
 	}
 }
